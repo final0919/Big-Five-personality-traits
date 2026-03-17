@@ -53,11 +53,14 @@ export default function App() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [activationInput, setActivationInput] = useState('');
   const [activationError, setActivationError] = useState(false);
+  const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
 
   const questions = useMemo(() => quizType === '15' ? QUESTIONS_15 : QUESTIONS_118, [quizType]);
 
   const handleStart = (type: '15' | '118') => {
     setQuizType(type);
+    setAnswers({});
+    setCurrentQuestionIndex(0);
     if (type === '118') {
       setPage('activation');
     } else {
@@ -78,7 +81,17 @@ export default function App() {
     const currentQuestion = questions[currentQuestionIndex];
     if (!currentQuestion) return;
 
-    setAnswers(prev => ({ ...prev, [currentQuestion.id]: value }));
+    setAnswers(prev => {
+      const newAnswers = { ...prev, [currentQuestion.id]: value };
+      
+      if (currentQuestionIndex === questions.length - 1) {
+        const result = calculateResults(newAnswers);
+        setQuizResult(result);
+        setPage('report');
+      }
+      
+      return newAnswers;
+    });
     
     if (currentQuestionIndex < questions.length - 1) {
       setTimeout(() => {
@@ -87,20 +100,19 @@ export default function App() {
           return prev;
         });
       }, 200);
-    } else {
-      setPage('report');
     }
   };
 
   const reset = () => {
     setPage('home');
     setAnswers({});
+    setQuizResult(null);
     setCurrentQuestionIndex(0);
     setActivationInput('');
     setActivationError(false);
   };
 
-  const calculateResults = (): QuizResult => {
+  const calculateResults = (currentAnswers: Record<number, number>): QuizResult => {
     const dimensionScores: Record<Dimension, number[]> = {
       openness: [],
       conscientiousness: [],
@@ -112,19 +124,14 @@ export default function App() {
     const subDimensionScores: Record<string, number[]> = {};
 
     questions.forEach(q => {
-      const ans = answers[q.id];
+      const ans = currentAnswers[q.id];
       if (ans !== undefined) {
         q.scorings.forEach(s => {
           let score = ans;
-          if (quizType === '118') {
-            // 1-5 scale (计分方式1: forward, 计分方式2: reverse)
-            // 计分方式1: 1,2,3,4,5 -> 1,2,3,4,5
-            // 计分方式2: 1,2,3,4,5 -> 5,4,3,2,1 (reverse)
-            if (s.reverse) score = 6 - ans;
-          } else {
-            // 0-5 scale for 15-question version
-            if (s.reverse) score = 5 - ans;
-          }
+          // Both 15 and 118 now use 0-5 scale
+          // Positive: 0,1,2,3,4,5
+          // Reverse: 5,4,3,2,1,0
+          if (s.reverse) score = 5 - ans;
           
           dimensionScores[s.dimension].push(score);
 
@@ -338,20 +345,14 @@ export default function App() {
                 </div>
 
                 <div className="grid gap-1.5 md:gap-3">
-                  {(quizType === '15' ? [
+                  {[
                     { label: '完全不符合', value: 0 },
                     { label: '基本不符合', value: 1 },
-                    { label: '一般符合', value: 2 },
-                    { label: '比较符合', value: 3 },
-                    { label: '基本符合', value: 4 },
-                    { label: '完全符合', value: 5 }
-                  ] : [
-                    { label: '完全不符合', value: 1 },
-                    { label: '基本不符合', value: 2 },
+                    { label: '不太符合', value: 2 },
                     { label: '一般符合', value: 3 },
                     { label: '基本符合', value: 4 },
                     { label: '完全符合', value: 5 }
-                  ]).map((opt) => (
+                  ].map((opt) => (
                     <button
                       key={opt.value}
                       onClick={() => handleAnswer(opt.value)}
@@ -388,7 +389,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {page === 'report' && (
+          {page === 'report' && quizResult && (
             <motion.div
               key="report"
               initial={{ opacity: 0, y: 20 }}
@@ -402,7 +403,7 @@ export default function App() {
               >
                 <RotateCcw className="w-4 h-4" /> 返回首页
               </button>
-              <ReportView result={calculateResults()} onRestart={reset} />
+              <ReportView result={quizResult} onRestart={reset} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -419,9 +420,11 @@ const DIMENSION_ICONS: Record<Dimension, React.ReactNode> = {
   openness: <Compass className="w-6 h-6" />
 };
 
+const DIMENSION_ORDER: Dimension[] = ['neuroticism', 'extraversion', 'openness', 'agreeableness', 'conscientiousness'];
+
 function ReportView({ result, onRestart }: { result: QuizResult; onRestart: () => void }) {
   const sortedDimensions = useMemo(() => 
-    Object.entries(result.scores).sort((a, b) => b[1] - a[1]),
+    DIMENSION_ORDER.map(key => [key, result.scores[key]] as [Dimension, number]),
     [result.scores]
   );
 
@@ -462,17 +465,11 @@ function ReportView({ result, onRestart }: { result: QuizResult; onRestart: () =
   };
 
   const chartData = {
-    labels: Object.values(DIMENSION_CONFIG).map(d => d.title),
+    labels: DIMENSION_ORDER.map(key => DIMENSION_CONFIG[key].title),
     datasets: [
       {
         label: '得分',
-        data: [
-          result.scores.openness,
-          result.scores.conscientiousness,
-          result.scores.extraversion,
-          result.scores.agreeableness,
-          result.scores.neuroticism,
-        ],
+        data: DIMENSION_ORDER.map(key => result.scores[key]),
         backgroundColor: 'rgba(234, 179, 8, 0.2)',
         borderColor: 'rgba(234, 179, 8, 1)',
         borderWidth: 2,
@@ -519,7 +516,7 @@ function ReportView({ result, onRestart }: { result: QuizResult; onRestart: () =
           <div className="grid gap-6">
             {sortedDimensions.map(([dim, score]) => {
               const cfg = DIMENSION_CONFIG[dim as Dimension];
-              const level = score >= 4 ? 'high' : (score >= 2.5 ? 'mid' : 'low');
+              const level = score >= 3.5 ? 'high' : (score >= 2 ? 'mid' : 'low');
               const interpretation = DIMENSION_INTERPRETATIONS[dim as Dimension][level];
               
               return (
@@ -628,7 +625,7 @@ function ReportView({ result, onRestart }: { result: QuizResult; onRestart: () =
         <div className="grid gap-6">
           {sortedDimensions.map(([dim, score]) => {
             const cfg = DIMENSION_CONFIG[dim as Dimension];
-            const level = score >= 4 ? 'high' : (score >= 2.5 ? 'mid' : 'low');
+            const level = score >= 3.5 ? 'high' : (score >= 2 ? 'mid' : 'low');
             const interpretation = DIMENSION_INTERPRETATIONS[dim as Dimension][level];
             
             return (
@@ -694,7 +691,7 @@ function ReportView({ result, onRestart }: { result: QuizResult; onRestart: () =
               .filter(([key]) => key.startsWith(dim.charAt(0).toUpperCase()))
               .filter(([subKey]) => {
                 const score = result.subScores![subKey];
-                return score !== undefined && (score < 2.5 || score > 4);
+                return score !== undefined && (score < 2 || score > 3);
               });
 
             if (subInterps.length === 0) return null;
@@ -708,7 +705,7 @@ function ReportView({ result, onRestart }: { result: QuizResult; onRestart: () =
                 <div className="grid md:grid-cols-2 gap-4">
                   {subInterps.map(([subKey, subInterp]) => {
                     const score = result.subScores![subKey] || 0;
-                    const level = score >= 3.5 ? 'high' : 'low';
+                    const level = score >= 3 ? 'high' : 'low';
                     const text = subInterp[level];
                     
                     return (
