@@ -76,7 +76,7 @@ export const QUESTIONS_118: Question[] = [
   { id: 55, text: '我对去陌生的地方旅行充满向往，崭新的见闻和体验令人兴奋。', scorings: [{ dimension: 'openness', subDimension: 'O4', reverse: false }] },
   { id: 56, text: '我喜欢各种热闹的聚会。', scorings: [{ dimension: 'extraversion', subDimension: 'E2', reverse: false }] },
   { id: 57, text: '我能很好地控制自己的欲望。', scorings: [{ dimension: 'neuroticism', subDimension: 'N5', reverse: true }] },
-  { id: 58, text: '我常常会不喜欢自己。', scorings: [{ dimension: 'neuroticism', subDimension: 'N3', reverse: true }] },
+  { id: 58, text: '我常常会不喜欢自己。', scorings: [{ dimension: 'neuroticism', subDimension: 'N3', reverse: false }] },
   { id: 59, text: '我对自己整体感到满意，接受自己的优点和缺点。', scorings: [{ dimension: 'conscientiousness', subDimension: 'C1', reverse: false }] },
   { id: 60, text: '我曾经为了达成自己的目的，不动声色地利用过别人，就像下棋时把别人当作棋子一样。', scorings: [{ dimension: 'agreeableness', subDimension: 'A2', reverse: true }] },
   { id: 61, text: '我喜欢阅读那些能引起思考的书籍或文章，比如哲学随笔、科幻小说，或者深度的社会评论。', scorings: [{ dimension: 'openness', subDimension: 'O5', reverse: false }] },
